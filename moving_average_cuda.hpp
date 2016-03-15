@@ -34,7 +34,7 @@ void moving_average_gpu(float* dst, float* src, const int N, const int R)
 
     cudaBindTextureToArray(tex, cuArray);
 
-    tex.normalized=false;
+    tex.normalized=true;
     //only with normalized!
     tex.addressMode[0] = cudaAddressModeWrap;
 
