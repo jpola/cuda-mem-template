@@ -36,7 +36,7 @@ void moving_average_gpu(float* dst, float* src, const int N, const int R)
 
     tex.normalized=true;
     //only with normalized!
-    tex.addressMode[0] = cudaAddressModeWrap;
+    tex.addressMode[0] = cudaAddressModeClamp;
 
     float* device_result;
     cudaMalloc((void**)&device_result, N * sizeof(float));

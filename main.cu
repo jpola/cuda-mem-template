@@ -1,6 +1,8 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include <algorithm>
+#include <numeric>
+#include <cmath>
 
 #include "moving_average_cuda.hpp"
 #include "memorytraverser.hpp"
@@ -20,9 +22,9 @@
 
 //Each new kernel have to be template to pass functor
 //instead of using tex, we have to pass src as an additional param
-template<typename AM, bool norm>
+template<typename AddressingModeFunctor>
 __global__ void moving_average_tr_kernel(float* dst, float* src, const int N, const int R,
-                                         MemoryTraverser<float, norm>* mt, AM am)
+                                         MemoryTraverser<float, AddressingModeFunctor>* mt)
 {
     const int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -31,7 +33,7 @@ __global__ void moving_average_tr_kernel(float* dst, float* src, const int N, co
         float average = 0.f;
 
         for (int k = -R; k <= R; k++) {
-            average = average + mt->get1D(src, (float)(tid - k + 0.5f)/(float)N, N, am);
+            average = average + mt->get1D(src, (float)(tid - k + 0.5f)/(float)N, N);
         }
 
         dst[tid] = average / (2.f * (float)R + 1.f);
@@ -50,41 +52,51 @@ void moving_average_tr(float *dst, float *src, const int N, const int R)
 
     cudaMemcpy(d_src, src, N * sizeof(float), cudaMemcpyHostToDevice);
 
+    //This defines the behaviour
+    using Traverser = MemoryTraverser<float, Clamp<true> >;
+    Traverser* gmt;
 
-    MemoryTraverser<float, true>* gmt;
 
     //First approach is to allocate the data using shared unified memory
     //HIP does not support that
-//    {
-//        gmt = new MemoryTraverser<float>;
-//        gmt->addressMode = cuAddressModeWrap;
-//        gmt->filterMode = cuFilterModePoint;
-//        gmt->normalized = 1;
-
-//        //with unified memory I can access the variables from host
-//        if (gmt->addressMode == cuAddressModeWrap)
-//            moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt, Wrap());
-//        else
-//            moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt, Clamp());
-
-//        delete gmt;
-//    }
-
-    //old plain way is to use host device copy;
+/*
     {
-        MemoryTraverser<float, Wrap> mt;
-        mt.addressMode = cuAddressModeWrap;
-        mt.filterMode =  cuFilterModePoint;
-        mt.normalized = 1;
+        gmt = new MemoryTraverser<float>;
+        gmt->addressMode = cuAddressModeWrap;
+        gmt->filterMode = cuFilterModePoint;
+        gmt->normalized = 1;
 
-        cudaMalloc((void**)&gmt, sizeof(MemoryTraverser<float, true>));
-        cudaMemcpy(gmt, &mt, sizeof(MemoryTraverser<float, true>), cudaMemcpyHostToDevice);
-
-        //here I have to refer to data on host but use GPU version in kernel;
-        if (mt.addressMode == cuAddressModeWrap)
-            moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt, Wrap<true>());
+        //with unified memory I can access the variables from host
+        if (gmt->addressMode == cuAddressModeWrap)
+            moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt, Wrap());
         else
             moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt, Clamp());
+
+        delete gmt;
+    }
+*/
+
+    // old plain way is to use host device copy;
+    {
+        // just explicit helpers
+        cuMemoryAddresMode addresMode = cuAddressModeWrap;
+        cuMemoryFilterMode filterMode = cuFilterModePoint;
+        int normalized = false;
+
+        // base on addres mode pick clamp or wrap
+        // if normalized = true address mode takes the same value;
+
+        Traverser mt;
+        //this is not necessary
+        mt.addressMode = addresMode;
+        mt.filterMode  = filterMode;
+        mt.normalized = normalized;
+
+
+        cudaMalloc((void**)&gmt, sizeof(Traverser));
+        cudaMemcpy(gmt, &mt, sizeof(Traverser), cudaMemcpyHostToDevice);
+
+        moving_average_tr_kernel<<<iDivUp(N, 256), 256>>>(d_dst, d_src, N, R, gmt);
 
         cudaFree(gmt);
     }
@@ -102,16 +114,16 @@ int main(int argc, char *argv[])
 
     typedef float T;
 
-    const int N = 100;
+    const int N = 1000;
     T* host_memory = new T[N];
 
     T* h_cuda_output = new T[N];
     T* h_hip_output  = new T[N];
 
-    std::iota(host_memory, host_memory + N, 0);
+    for (int i = 0; i < N; i++) host_memory[i] = i;
 
 
-    const int shift = 10;
+    const int shift = -10;
 
     //original cuda texture version
     moving_average_gpu(h_cuda_output, host_memory, N, shift);
@@ -123,15 +135,18 @@ int main(int argc, char *argv[])
     if (implicit_comp)
     {
         for(int i = 0; i < N; i++)
-            if ( std::fabs(h_hip_output[i] - h_cuda_output[i]) > 0)
-                std::cout << i << " " << h_hip_output[i]<< std::endl;
+        {
+            float eps = std::fabs(h_hip_output[i] - h_cuda_output[i]);
+            if ( eps > 0)
+                std::cout << i << " " << h_hip_output[i] << " eps: " << eps << std::endl;
+        }
     }
     else
     {
             for(int i = 0; i < N; i++)
                     std::cout << i << " "
-                              << h_hip_output[i] << " "
-                              << h_cuda_output[i] << std::endl;
+                              << "my : " << h_hip_output[i] << " "
+                              << "rf : " << h_cuda_output[i] << std::endl;
     }
 
 

@@ -1,4 +1,0 @@
-main.cu
-SConstruct
-moving_average_cuda.hpp
-memorytraverser.hpp
