@@ -43,4 +43,5 @@
 cuda-template
 
 #images
-./data/*
+data/
+data/*

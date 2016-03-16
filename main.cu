@@ -8,6 +8,7 @@
 #include "moving_average_custom.hpp"
 
 #include "rotate_image_cuda.hpp"
+#include "rotate_image_custom.hpp"
 
 template <typename T>
 bool test_moving_average(const int N, const int R,
@@ -78,7 +79,16 @@ bool test_rotate(const float angle,
 {
 
     std::string lena_path = "data/lena_bw.pgm";
-    cuda_rotate::rotate_cuda<T>(lena_path, angle, filterMode, addressMode, normalization);
+    cimg_library::CImg<T> ci =
+            cuda_rotate::rotate_cuda<T>(lena_path, angle, filterMode, addressMode, normalization);
+    cimg_library::CImg<T> mi =
+            custom_rotate::rotate_custom<T>(lena_path, angle, filterMode, addressMode, normalization);
+
+    cimg_library::CImg<T> diff =  ci - mi;
+    diff.abs();
+
+    diff.save("data/diff.pgm");
+
 
     return true;
 

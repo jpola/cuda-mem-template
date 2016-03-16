@@ -7,14 +7,14 @@
 
 #include "cuda_errors.hpp"
 
-
+//to hide global texture objects
 namespace cuda_rotate
 {
 
 using namespace cimg_library;
 // Texture reference for 2D float texture
 texture<float, 2, cudaReadModeElementType> tex;
-
+texture<float, 1, cudaReadModeElementType> tx1D;
 
 template<typename T>
 __global__ void transformKernel(T* outputData,
@@ -35,7 +35,8 @@ __global__ void transformKernel(T* outputData,
     tv /= (T)height;
 
     // read from texture and write to global memory
-    T val = tex2D(tex, tu+0.5f, tv+0.5f);
+    //T val = tex1D(tex, tu+0.5f, tv+0.5f);
+    T val = tex1D(tx1D, tu+0.5f);
 //        if(x == 0 && y == 0)
 //            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
 //        if(x == 1 && y == 0)
@@ -48,7 +49,7 @@ __global__ void transformKernel(T* outputData,
 
 
 template<typename T>
-void rotate_cuda(const std::string& filename,
+CImg<T> rotate_cuda(const std::string& filename,
                  const float angle,
                  cudaTextureFilterMode filterMode,
                  cudaTextureAddressMode addressMode,
@@ -69,13 +70,18 @@ void rotate_cuda(const std::string& filename,
     cudaSafeCall(cudaMallocArray(&cuArray, &channelDesc, width, height));
     cudaSafeCall(cudaMemcpyToArray(cuArray, 0, 0, d, size, cudaMemcpyHostToDevice));
 
-    tex.addressMode[0] = addressMode;
-    tex.addressMode[1] = addressMode;
-    tex.filterMode = filterMode;
-    tex.normalized = normalization;
+//    tex.addressMode[0] = addressMode;
+//    tex.addressMode[1] = addressMode;
+//    tex.filterMode = filterMode;
+//    tex.normalized = normalization;
+    tx1D.addressMode[0] = addressMode;
+    tx1D.addressMode[1] = addressMode;
+    tx1D.filterMode = filterMode;
+    tx1D.normalized = normalization;
 
     // Bind the array to the texture
-    cudaSafeCall(cudaBindTextureToArray(tex, cuArray, channelDesc));
+    //cudaSafeCall(cudaBindTextureToArray(tex, cuArray, channelDesc));
+    cudaSafeCall(cudaBindTextureToArray(tx1D, cuArray, channelDesc));
 
     // result data
     T* d_data;
@@ -91,7 +97,15 @@ void rotate_cuda(const std::string& filename,
     //get back the results on host.
     cudaSafeCall(cudaMemcpy(d, d_data, size, cudaMemcpyDeviceToHost));
 
+    //cudaSafeCall(cudaUnbindTexture(tex));
+    cudaSafeCall(cudaUnbindTexture(tx1D));
+
+    cudaSafeCall(cudaFree(d_data));
+    cudaSafeCall(cudaFreeArray(cuArray));
+
     image.save("data/cuda_result.pgm");
+
+    return image;
 }
 
 
