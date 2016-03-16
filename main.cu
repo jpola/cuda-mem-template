@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 {
 
     cudaTextureFilterMode filterMode = cudaFilterModePoint;
-    cudaTextureAddressMode addressMode = cudaAddressModeWrap;
+    cudaTextureAddressMode addressMode = cudaAddressModeClamp;
     int normalization = 1;
 
     bool result_avg =

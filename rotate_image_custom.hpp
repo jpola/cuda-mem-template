@@ -12,13 +12,13 @@ namespace custom_rotate
 
 using namespace cimg_library;
 
-template<typename T, typename AddressingModeFunctor>
+template<typename T, typename TraverserType>
 __global__ void transformKernel(T* outputData,
                                 T* inputData,
                                 int width,
                                 int height,
                                 T theta,
-                                MemoryTraverser<T, AddressingModeFunctor>* mt)
+                                TraverserType* mt)
 {
     // calculate normalized texture coordinates
     unsigned int x = blockIdx.x*blockDim.x + threadIdx.x;
@@ -32,28 +32,10 @@ __global__ void transformKernel(T* outputData,
     tu /= (T)width;
     tv /= (T)height;
 
-    tu += 0.5f;
-    tv += 0.5f;
-
     // read from texture and write to global memory
-    //T val = tex1D(tex, tu+0.5f, tv+0.5f);
-    T val = mt->get2D(inputData, tu, tv, width, height);
-    T valm = mt->get2D(inputData, tu-1, tv, width, height);
-    T valp = mt->get2D(inputData, tu+1, tv, width, height);
-
-    if (tu == 0.5f)
-        printf("ssc(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
-
-        if(x == 0 && y == 0)
-            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
-        if(x == 1 && y == 1)
-            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
-        if(x == width/2 && y == height/2)
-            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
-
+    T val = mt->get2D(inputData, tu + 0.5f, tv + 0.5f, width, height);
 
     outputData[y*width + x] = val;
-
 }
 
 template<typename T, typename TraverserType>
@@ -114,35 +96,49 @@ CImg<T> rotate_custom(const std::string& filename,
                                     int normalization)
 {
     //This defines the behaviour
-    using TraverserClampNorm = MemoryTraverser<float, Clamp<true> >;
-    using TraverserClampUNorm = MemoryTraverser<float, Clamp<false> >;
-    using TraverserWrapNorm = MemoryTraverser<float, Wrap<true> >;
-    using TraverserWrapUNorm = MemoryTraverser<float, Wrap<false> >;
+    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<true>,  PixelFilter<true>>;
+    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<false>, PixelFilter<true>>;
 
-    //if(filterMode == cudaFilterModePoint)
-    //else //Linear
+    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<true>, PixelFilter<false>>;
+    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<false>, PixelFilter<false>>;
 
-    if (addressMode == cudaAddressModeWrap)
+    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<true>, PixelFilter<true>>;
+    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<false>, PixelFilter<true>>;
+
+    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<true>, PixelFilter<false>>;
+    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<false>, PixelFilter<false>>;
+
+    if(filterMode == cudaFilterModePoint)
     {
-        if(normalization)
+        if (addressMode == cudaAddressModeWrap)
         {
-            return rotate_custom_impl<T, TraverserWrapNorm>(filename, angle);
+            if(normalization)
+            {
+                return rotate_custom_impl<T, TraverserWrapNormPixel>(filename, angle);
+            }
+            else
+            {
+                return rotate_custom_impl<T, TraverserWrapUNormPixel>(filename, angle);
+            }
         }
-        else
+        else //clamp
         {
-            return rotate_custom_impl<T, TraverserWrapUNorm>(filename, angle);
+            if(normalization)
+            {
+                return rotate_custom_impl<T, TraverserClampNormPixel>(filename, angle);
+            }
+            else
+            {
+                return rotate_custom_impl<T, TraverserClampUNormPixel>(filename, angle);
+            }
+
         }
     }
-    else //Clamp
+    else //Linear interpolation
     {
-        if(normalization)
-        {
-            return rotate_custom_impl<T, TraverserClampNorm>(filename, angle);
-        }
-        else
-        {
-            return rotate_custom_impl<T, TraverserClampUNorm>(filename, angle);
-        }
+        std::cerr << "LINEAR IS NOT SUPPORTED" << std::endl;
+        exit(-1);
+
     }
 
 }

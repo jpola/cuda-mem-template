@@ -3,11 +3,11 @@
 #include "memorytraverser.hpp"
 #include "cuda_errors.hpp"
 
-//Each new kernel have to be template to pass functor
+//Each new kernel have to be template to pass MemoryTraverser
 //instead of using tex, we have to pass src as an additional param
-template<typename AddressingModeFunctor>
+template<typename TraverserType>
 __global__ void moving_average_tr_kernel(float* dst, float* src, const int N, const int R,
-                                         MemoryTraverser<float, AddressingModeFunctor>* mt)
+                                         TraverserType* mt)
 {
     const int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -97,35 +97,49 @@ void moving_average_tr(float *dst, float *src, const int N, const int R,
                        int normalization)
 {
     //This defines the behaviour
-    using TraverserClampNorm = MemoryTraverser<float, Clamp<true> >;
-    using TraverserClampUNorm = MemoryTraverser<float, Clamp<false> >;
-    using TraverserWrapNorm = MemoryTraverser<float, Wrap<true> >;
-    using TraverserWrapUNorm = MemoryTraverser<float, Wrap<false> >;
+    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<true>,  PixelFilter<true>>;
+    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<false>, PixelFilter<true>>;
 
-    //if(filterMode == cudaFilterModePoint)
-    //else //Linear
+    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<true>, PixelFilter<false>>;
+    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<false>, PixelFilter<false>>;
 
-    if (addressMode == cudaAddressModeWrap)
+    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<true>, PixelFilter<true>>;
+    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<false>, PixelFilter<true>>;
+
+    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<true>, PixelFilter<false>>;
+    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<false>, PixelFilter<false>>;
+
+    if(filterMode == cudaFilterModePoint)
     {
-        if(normalization)
+        if (addressMode == cudaAddressModeWrap)
         {
-            moving_average_tr_impl<TraverserWrapNorm>(dst, src, N, R);
+            if(normalization)
+            {
+                moving_average_tr_impl<TraverserWrapNormPixel>(dst, src, N, R);
+            }
+            else
+            {
+                moving_average_tr_impl<TraverserWrapUNormPixel>(dst, src, N, R);
+            }
         }
-        else
+        else //clamp
         {
-            moving_average_tr_impl<TraverserWrapUNorm>(dst, src, N, R);
+            if(normalization)
+            {
+                moving_average_tr_impl<TraverserClampNormPixel>(dst, src, N, R);
+            }
+            else
+            {
+                moving_average_tr_impl<TraverserClampUNormPixel>(dst, src, N, R);
+            }
+
         }
     }
-    else //Clamp
+    else //Linear interpolation
     {
-        if(normalization)
-        {
-            moving_average_tr_impl<TraverserClampNorm>(dst, src, N, R);
-        }
-        else
-        {
-            moving_average_tr_impl<TraverserClampUNorm>(dst, src, N, R);
-        }
+        std::cerr << "LINEAR IS NOT SUPPORTED" << std::endl;
+        exit(-1);
+
     }
 }
 #endif // MOVING_AVERAGE_CUSTOM_HPP

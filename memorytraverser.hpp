@@ -31,7 +31,7 @@ template<>
 __device__ __host__
 float Wrap<false>::operator ()(float x, float upper, float lower, float range) const
 {
-    assert(false); //is it wise to use wrapping on non normalized coords;
+    assert(false); //is it wise to use wrapping on non normalized coords?;
     float  r = upper - lower;
     return x - r * floorf(x/r);
 
@@ -85,6 +85,66 @@ float Clamp<false>::operator ()(float x, float upper, float lower, float range) 
     return fminf(range-1, fmaxf(lower, x));
 }
 
+__host__ __device__ inline float frac(float x)
+{
+        float frac, tmp = x - (float)(int)(x);
+        float frac256 = (float)(int)( tmp*256.0f + 0.5f );
+        frac = frac256 / 256.0f;
+        return frac;
+
+//    float frac_part, int_part;
+//    frac_part = modf(x, &int_part);
+//    return frac_part;
+}
+
+// MODE = true  - nearest pixel
+// MODE = false - linear
+template<bool MODE>
+class PixelFilter
+{
+public:
+    __device__ __host__
+    float operator() (float* data, float x) const
+    {
+        return data[(int)x];
+    }
+
+    __device__ __host__
+    float operator() (float* data, float x, float y, const int stride) const
+    {
+        return data[(int)(x + y*stride)];
+    }
+};
+
+//PixelMode specialization
+template<>
+__device__ __host__
+float PixelFilter<true>::operator ()(float* data, float x) const
+{
+    return data [(int)floorf(x)];
+}
+
+template<>
+__device__ __host__
+float PixelFilter<true>::operator ()(float* data, float x, float y, const int stride) const
+{
+    return data [(int)(floorf(x) + floorf(y)*stride)];
+}
+
+//Linear interpolation
+template<>
+__device__ __host__
+float PixelFilter<false>::operator() (float* data, float x) const
+{
+    float alpha = frac(x);
+    float xb = x - 0.5f;
+    int i = floorf(xb);
+
+    float v = (1.f - alpha)*data[i] + alpha * data[i+1]; //expected overflow
+
+    return v;
+}
+
 
 //This allows me to use new operator to use class directly on gpu;
 //Otherwise do host device copy flow to put the class on GPU
@@ -104,7 +164,7 @@ public:
     }
 };
 
-template <typename T, typename AddressingModeFunctor>
+template <typename T, typename AddressingModeFunctor, typename FilteringFunctor>
 class MemoryTraverser : public Managed
 {
 public:
@@ -114,10 +174,10 @@ public:
         T i = addressingFunctor(x, size, 0, size);
 
         //point filtering
-        i = floorf(i);
-
-        T v = src[(int)i];
-        return v;
+        //i = floorf(i);
+        //T v = src[(int)i];
+        //return v;
+        return filteringFunctor(src, i);
     }
 
     //TODO:: put the sizes as members
@@ -127,16 +187,18 @@ public:
         T j = addressingFunctor(y, y_size, 0, y_size);
 
         //This is point filtering;
-        i = floorf(i);
-        j = floorf(j);
-
-        T v = src[(int)(i + x_size*j)];
-        return v;
+        //i = floorf(i);
+        //j = floorf(j);
+        //T v = src[(int)(i + x_size*j)];
+        //return v;
+        return filteringFunctor(src, i, j, x_size);
     }
 
 
 public:
     AddressingModeFunctor addressingFunctor;
+    FilteringFunctor filteringFunctor;
+
     cuMemoryAddresMode addressMode;
     cuMemoryFilterMode filterMode;
     int normalized;
