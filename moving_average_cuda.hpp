@@ -1,5 +1,6 @@
 #ifndef MOVING_AVERAGE_CUDA_HPP
 #define MOVING_AVERAGE_CUDA_HPP
+#include "cuda_errors.hpp"
 
 inline int iDivUp(int a, int b)
 {
@@ -23,35 +24,38 @@ __global__ void moving_average_kernel(float* __restrict__ dst, const int N, cons
     }
 }
 
-void moving_average_gpu(float* dst, float* src, const int N, const int R)
+void moving_average_gpu(float* dst, float* src, const int N, const int R,
+                        cudaTextureFilterMode filterMode,
+                        cudaTextureAddressMode addressMode,
+                        int normalization)
 {
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
     //cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
 
     cudaArray* cuArray;
-    cudaMallocArray(&cuArray, &channelDesc, N, 1);
-    cudaMemcpyToArray(cuArray, 0, 0, src, N * sizeof(float), cudaMemcpyHostToDevice);
+    cudaSafeCall(cudaMallocArray(&cuArray, &channelDesc, N, 1));
+    cudaSafeCall(cudaMemcpyToArray(cuArray, 0, 0, src, N * sizeof(float), cudaMemcpyHostToDevice));
 
-    cudaBindTextureToArray(tex, cuArray);
+    cudaSafeCall(cudaBindTextureToArray(tex, cuArray));
 
-    tex.normalized=true;
+    tex.filterMode = filterMode;
+    tex.normalized = normalization;
     //only with normalized!
-    tex.addressMode[0] = cudaAddressModeClamp;
+    tex.addressMode[0] = addressMode;
 
     float* device_result;
-    cudaMalloc((void**)&device_result, N * sizeof(float));
+    cudaSafeCall(cudaMalloc((void**)&device_result, N * sizeof(float)));
 
     moving_average_kernel<<<iDivUp(N, 256), 256>>>(device_result, N, R);
+    cudaCheckError();
+    cudaSafeCall(cudaDeviceSynchronize());
 
-    cudaError err = cudaDeviceSynchronize();
-    //std::cout << "Kernel execution : " << cudaGetErrorString(err) << std::endl;
+    cudaSafeCall(cudaMemcpy(dst, device_result, N * sizeof(float), cudaMemcpyDeviceToHost));
 
-    err = cudaMemcpy(dst, device_result, N * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaSafeCall(cudaUnbindTexture(tex));
+    cudaSafeCall(cudaFreeArray(cuArray));
+    cudaSafeCall(cudaFree(device_result));
 
-    cudaUnbindTexture(tex);
-    cudaFreeArray(cuArray);
-    cudaFree(&device_result);
-    //std::cout << "To device : " << cudaGetErrorString(err) << std::endl;
 }
 
 
