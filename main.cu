@@ -85,7 +85,7 @@ bool test_rotate(const float angle,
             custom_rotate::rotate_custom<T>(lena_path, angle, filterMode, addressMode, normalization);
 
     cimg_library::CImg<T> diff =  ci - mi;
-    //diff.abs();
+    diff.abs();
 
     //bool result = false;
     bool result = true;
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
 {
 
     cudaTextureFilterMode filterMode = cudaFilterModePoint;
-    cudaTextureAddressMode addressMode = cudaAddressModeClamp;
+    cudaTextureAddressMode addressMode = cudaAddressModeWrap;
     int normalization = 1;
 
     bool result_avg =
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
     }
 
     bool result_rot =
-            test_rotate<float>(0.5, filterMode,
+            test_rotate<float>(1.5, filterMode,
                                addressMode, normalization);
 
     if (!result_rot)

@@ -22,7 +22,6 @@ public:
     __device__ __host__
     float operator() (float x, float upper, float lower, float range) const
     {
-        //printf("General WRAP");
         float r = upper - lower;
         return x - r * floorf(x/r);
     }
@@ -42,8 +41,8 @@ template<>
 __device__ __host__
 float Wrap<true>::operator ()(float x, float upper, float lower, float range) const
 {
-    float  r = 1.f;
-    return range* (x - r * floorf(x/r));
+    //optimized with 1.f as r see general
+    return range* (x - floorf(x));
 }
 
 template<bool NORMALIZED>
@@ -62,14 +61,18 @@ template<>
 __device__ __host__
 float Clamp<true>::operator ()(float x, float upper, float lower, float range) const
 {
+    //TODO:: optimization to one line would be great!
     float d = 1.f / range;
     if (x < 0.f)
     {
+        //obvious
         return 0.f;
     }
-    if (x > 1.)
+    //if larger than upper bound
+    if (x > 1.f)
     {
-        return (1-d)*range;
+        //return previous which is 1.f - delta;
+        return (1.f-d)*range;
     }
 
     return x*range;
@@ -79,12 +82,7 @@ template<>
 __device__ __host__
 float Clamp<false>::operator ()(float x, float upper, float lower, float range) const
 {
-    float d = (upper - lower) / range;
-    float u =  upper - d;
-    if (x < 0.f) return 0.f;
-    if (x > u) return u;
-
-    return x;
+    return fminf(range-1, fmaxf(lower, x));
 }
 
 
@@ -113,10 +111,12 @@ public:
 
     __host__ __device__ T get1D(T *src, float x, const int size)
     {
-
         T i = addressingFunctor(x, size, 0, size);
-        T v = src[(int)i];
 
+        //point filtering
+        i = floorf(i);
+
+        T v = src[(int)i];
         return v;
     }
 
@@ -125,6 +125,8 @@ public:
     {
         T i = addressingFunctor(x, x_size, 0, x_size);
         T j = addressingFunctor(y, y_size, 0, y_size);
+
+        //This is point filtering;
         i = floorf(i);
         j = floorf(j);
 
