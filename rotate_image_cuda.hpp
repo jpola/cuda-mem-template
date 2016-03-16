@@ -34,15 +34,25 @@ __global__ void transformKernel(T* outputData,
     tu /= (T)width;
     tv /= (T)height;
 
+    tu += 0.5f;
+    tv += 0.5f;
+
+
+
     // read from texture and write to global memory
-    //T val = tex1D(tex, tu+0.5f, tv+0.5f);
-    T val = tex1D(tx1D, tu+0.5f);
-//        if(x == 0 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
-//        if(x == 1 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
-//        if(x == 2 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
+    T val = tex2D(tex, tu, tv);
+    T valm = tex2D(tex, tu-1, tv);
+    T valp = tex2D(tex, tu+1, tv);
+    if (tu == 0.5f)
+        printf("ss(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+    //T val = tex1D(tx1D, tu+0.5f);
+        if(x == 0 && y == 0)
+            printf("(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+        if(x == 1 && y == 1)
+            printf("(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+        if(x == width/2 && y == height/2)
+            printf("(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+
     outputData[y*width + x] = val;
 }
 
@@ -70,18 +80,18 @@ CImg<T> rotate_cuda(const std::string& filename,
     cudaSafeCall(cudaMallocArray(&cuArray, &channelDesc, width, height));
     cudaSafeCall(cudaMemcpyToArray(cuArray, 0, 0, d, size, cudaMemcpyHostToDevice));
 
-//    tex.addressMode[0] = addressMode;
-//    tex.addressMode[1] = addressMode;
-//    tex.filterMode = filterMode;
-//    tex.normalized = normalization;
-    tx1D.addressMode[0] = addressMode;
-    tx1D.addressMode[1] = addressMode;
-    tx1D.filterMode = filterMode;
-    tx1D.normalized = normalization;
+    tex.addressMode[0] = addressMode;
+    tex.addressMode[1] = addressMode;
+    tex.filterMode = filterMode;
+    tex.normalized = normalization;
+//    tx1D.addressMode[0] = addressMode;
+//    tx1D.addressMode[1] = addressMode;
+//    tx1D.filterMode = filterMode;
+//    tx1D.normalized = normalization;
 
     // Bind the array to the texture
-    //cudaSafeCall(cudaBindTextureToArray(tex, cuArray, channelDesc));
-    cudaSafeCall(cudaBindTextureToArray(tx1D, cuArray, channelDesc));
+    cudaSafeCall(cudaBindTextureToArray(tex, cuArray, channelDesc));
+    //cudaSafeCall(cudaBindTextureToArray(tx1D, cuArray, channelDesc));
 
     // result data
     T* d_data;
@@ -97,12 +107,13 @@ CImg<T> rotate_cuda(const std::string& filename,
     //get back the results on host.
     cudaSafeCall(cudaMemcpy(d, d_data, size, cudaMemcpyDeviceToHost));
 
-    //cudaSafeCall(cudaUnbindTexture(tex));
-    cudaSafeCall(cudaUnbindTexture(tx1D));
+    cudaSafeCall(cudaUnbindTexture(tex));
+    //cudaSafeCall(cudaUnbindTexture(tx1D));
 
     cudaSafeCall(cudaFree(d_data));
     cudaSafeCall(cudaFreeArray(cuArray));
 
+    //image.normalize(0, 255);
     image.save("data/cuda_result.pgm");
 
     return image;

@@ -32,15 +32,26 @@ __global__ void transformKernel(T* outputData,
     tu /= (T)width;
     tv /= (T)height;
 
+    tu += 0.5f;
+    tv += 0.5f;
+
     // read from texture and write to global memory
     //T val = tex1D(tex, tu+0.5f, tv+0.5f);
-    T val = mt->get1D(inputData, tu+0.5f, width);
-//        if(x == 0 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
-//        if(x == 1 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
-//        if(x == 2 && y == 0)
-//            printf("u = %f, v = %f, tu = %f, tv = %f, val = %f\n", u, v, tu, tv, val);
+    T val = mt->get2D(inputData, tu, tv, width, height);
+    T valm = mt->get2D(inputData, tu-1, tv, width, height);
+    T valp = mt->get2D(inputData, tu+1, tv, width, height);
+
+    if (tu == 0.5f)
+        printf("ssc(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+
+        if(x == 0 && y == 0)
+            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+        if(x == 1 && y == 1)
+            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+        if(x == width/2 && y == height/2)
+            printf("c(%d, %d), u = %f, v = %f, tu = %f, tv = %f, val = %f, valm %f, valp %f\n", x, y, u, v, tu, tv, val, valm, valp);
+
+
     outputData[y*width + x] = val;
 
 }
@@ -88,6 +99,7 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     cudaSafeCall(cudaFree(d_output));
     cudaSafeCall(cudaFree(d_mt));
 
+    //image.normalize(0, 255);
     image.save("data/custom_result.pgm");
     return image;
 }

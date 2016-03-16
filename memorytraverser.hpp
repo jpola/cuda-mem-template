@@ -63,7 +63,16 @@ __device__ __host__
 float Clamp<true>::operator ()(float x, float upper, float lower, float range) const
 {
     float d = 1.f / range;
-    return range * fminf(1.f - d, fmaxf(0.f, x));
+    if (x < 0.f)
+    {
+        return 0.f;
+    }
+    if (x > 1.)
+    {
+        return (1-d)*range;
+    }
+
+    return x*range;
 }
 
 template<>
@@ -71,7 +80,11 @@ __device__ __host__
 float Clamp<false>::operator ()(float x, float upper, float lower, float range) const
 {
     float d = (upper - lower) / range;
-    return fminf(upper-d, fmaxf(lower, x));
+    float u =  upper - d;
+    if (x < 0.f) return 0.f;
+    if (x > u) return u;
+
+    return x;
 }
 
 
@@ -100,10 +113,25 @@ public:
 
     __host__ __device__ T get1D(T *src, float x, const int size)
     {
+
         T i = addressingFunctor(x, size, 0, size);
         T v = src[(int)i];
+
         return v;
     }
+
+    //TODO:: put the sizes as members
+    __host__ __device__ T get2D(T *src, float x, float y, const int x_size, const int y_size)
+    {
+        T i = addressingFunctor(x, x_size, 0, x_size);
+        T j = addressingFunctor(y, y_size, 0, y_size);
+        i = floorf(i);
+        j = floorf(j);
+
+        T v = src[(int)(i + x_size*j)];
+        return v;
+    }
+
 
 public:
     AddressingModeFunctor addressingFunctor;
@@ -111,4 +139,13 @@ public:
     cuMemoryFilterMode filterMode;
     int normalized;
 };
+
+// something like that could be used for kernel calls
+// It may determine the proper type of the memoryTraverser
+template<typename Function, typename... Args>
+void Launcher(Args&&... args)
+{
+    return Function(std::forward<Args>(args)...);
+}
+
 #endif // MEMORYTRAVERSER_HPP

@@ -85,29 +85,46 @@ bool test_rotate(const float angle,
             custom_rotate::rotate_custom<T>(lena_path, angle, filterMode, addressMode, normalization);
 
     cimg_library::CImg<T> diff =  ci - mi;
-    diff.abs();
+    //diff.abs();
+
+    //bool result = false;
+    bool result = true;
+    int index = 0;
+    for (auto p : diff)
+    {
+        if (p > 0)
+        {
+            std::cout << "Pixel difference ["<< index << "] = " << p << std::endl;
+            result = false;
+        }
+        index++;
+    }
 
     diff.save("data/diff.pgm");
 
 
-    return true;
+    return result;
 
 }
 
 int main(int argc, char *argv[])
 {
 
+    cudaTextureFilterMode filterMode = cudaFilterModePoint;
+    cudaTextureAddressMode addressMode = cudaAddressModeClamp;
+    int normalization = 1;
+
     bool result_avg =
-            test_moving_average<float>(10, 3, cudaFilterModePoint,
-                                       cudaAddressModeClamp, 1);
+            test_moving_average<float>(100, -13, filterMode,
+                                       addressMode, normalization);
     if (!result_avg)
     {
         std::cout << "\n*** Result average FAILED! ***\n" << std::endl;
     }
 
     bool result_rot =
-            test_rotate<float>(0.5, cudaFilterModePoint,
-                               cudaAddressModeClamp, 1);
+            test_rotate<float>(0.5, filterMode,
+                               addressMode, normalization);
 
     if (!result_rot)
     {
