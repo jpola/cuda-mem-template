@@ -16,7 +16,7 @@ __global__ void moving_average_tr_kernel(float* dst, float* src, const int N, co
         float average = 0.f;
 
         for (int k = -R; k <= R; k++) {
-            average = average + mt->get1D(src, (float)(tid - k + 0.5f)/(float)N, N);
+            average = average + mt->get1D(src, (float)(tid - k + 0.5f)/(float)N);
         }
 
         dst[tid] = average / (2.f * (float)R + 1.f);
@@ -40,7 +40,7 @@ void moving_average_tr_impl(float *dst, float *src, const int N, const int R)
 
     //First approach is to allocate the data using shared unified memory
     //HIP does not support that
-/*
+    /*
     {
         gmt = new MemoryTraverser<float>;
         gmt->addressMode = cuAddressModeWrap;
@@ -68,6 +68,7 @@ void moving_average_tr_impl(float *dst, float *src, const int N, const int R)
         // if normalized = true address mode takes the same value;
 
         TraverserType mt;
+        mt.width = N;
         //this is not necessary
         mt.addressMode = addresMode;
         mt.filterMode  = filterMode;
@@ -137,9 +138,29 @@ void moving_average_tr(float *dst, float *src, const int N, const int R,
     }
     else //Linear interpolation
     {
-        std::cerr << "LINEAR IS NOT SUPPORTED" << std::endl;
-        exit(-1);
+        if (addressMode == cudaAddressModeWrap)
+        {
+            if(normalization)
+            {
+                moving_average_tr_impl<TraverserWrapNormLinear>(dst, src, N, R);
+            }
+            else
+            {
+                moving_average_tr_impl<TraverserWrapUNormLinear>(dst, src, N, R);
+            }
+        }
+        else //clamp
+        {
+            if(normalization)
+            {
+                moving_average_tr_impl<TraverserClampNormLinear>(dst, src, N, R);
+            }
+            else
+            {
+                moving_average_tr_impl<TraverserClampUNormLinear>(dst, src, N, R);
+            }
 
+        }
     }
 }
 #endif // MOVING_AVERAGE_CUSTOM_HPP

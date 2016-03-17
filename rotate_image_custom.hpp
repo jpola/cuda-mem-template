@@ -33,7 +33,7 @@ __global__ void transformKernel(T* outputData,
     tv /= (T)height;
 
     // read from texture and write to global memory
-    T val = mt->get2D(inputData, tu + 0.5f, tv + 0.5f, width, height);
+    T val = mt->get2D(inputData, tu + 0.5f, tv + 0.5f);
 
     outputData[y*width + x] = val;
 }
@@ -58,6 +58,8 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     //prepare memory traverser;
     TraverserType* d_mt;
     TraverserType h_mt;
+    h_mt.width = width;
+    h_mt.height = height;
 
     cudaSafeCall(cudaMalloc((void**)&d_mt, sizeof(TraverserType)));
     cudaSafeCall(cudaMemcpy(d_mt, &h_mt, sizeof(TraverserType), cudaMemcpyHostToDevice));
@@ -72,6 +74,30 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
                                                  d_mt);
     cudaCheckError();
     cudaSafeCall(cudaDeviceSynchronize());
+
+    //TIMING
+    cudaEvent_t start, stop;
+    cudaSafeCall(cudaEventCreate(&start));
+    cudaSafeCall(cudaEventCreate(&stop));
+
+    const int NTimes = 250;
+    cudaEventRecord(start);
+    for (int i = 0; i < NTimes; i++)
+    {
+        transformKernel<T><<<dimGrid, dimBlock, 0>>>(d_output, d_input,
+                                                     width, height, angle,
+                                                     d_mt);
+    }
+    cudaEventRecord(stop);
+
+    cudaEventSynchronize(stop);
+    float miliseconds = 0;
+    cudaEventElapsedTime(&miliseconds, start, stop);
+    std::cout << "CUSTOM TIME: " << miliseconds / (float)NTimes << " ms" <<std::endl;
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
 
     //copy back the data to host
     cudaSafeCall(cudaMemcpy(d, d_output, size, cudaMemcpyDeviceToHost));
@@ -136,8 +162,29 @@ CImg<T> rotate_custom(const std::string& filename,
     }
     else //Linear interpolation
     {
-        std::cerr << "LINEAR IS NOT SUPPORTED" << std::endl;
-        exit(-1);
+        if (addressMode == cudaAddressModeWrap)
+        {
+            if(normalization)
+            {
+                return rotate_custom_impl<T, TraverserWrapNormLinear>(filename, angle);
+            }
+            else
+            {
+                return rotate_custom_impl<T, TraverserWrapUNormLinear>(filename, angle);
+            }
+        }
+        else //clamp
+        {
+            if(normalization)
+            {
+                return rotate_custom_impl<T, TraverserClampNormLinear>(filename, angle);
+            }
+            else
+            {
+                return rotate_custom_impl<T, TraverserClampUNormLinear>(filename, angle);
+            }
+
+        }
 
     }
 

@@ -31,7 +31,7 @@ template<>
 __device__ __host__
 float Wrap<false>::operator ()(float x, float upper, float lower, float range) const
 {
-    assert(false); //is it wise to use wrapping on non normalized coords?;
+    //assert(false); //is it wise to use wrapping on non normalized coords?;
     float  r = upper - lower;
     return x - r * floorf(x/r);
 
@@ -104,45 +104,72 @@ class PixelFilter
 {
 public:
     __device__ __host__
-    float operator() (float* data, float x) const
+    float operator() (float* data, float x, const int width) const
     {
         return data[(int)x];
     }
 
     __device__ __host__
-    float operator() (float* data, float x, float y, const int stride) const
+    float operator() (float* data, float x, float y, const int width, const int height) const
     {
-        return data[(int)(x + y*stride)];
+        return data[(int)(x + y*width)];
     }
 };
 
 //PixelMode specialization
 template<>
 __device__ __host__
-float PixelFilter<true>::operator ()(float* data, float x) const
+float PixelFilter<true>::operator ()(float* data, float x, const int width) const
 {
     return data [(int)floorf(x)];
 }
 
 template<>
 __device__ __host__
-float PixelFilter<true>::operator ()(float* data, float x, float y, const int stride) const
+float PixelFilter<true>::operator ()(float* data, float x, float y, const int width, const int height) const
 {
-    return data [(int)(floorf(x) + floorf(y)*stride)];
+    return data [(int)(floorf(x) + floorf(y)*width)];
 }
 
 //Linear interpolation
 template<>
 __device__ __host__
-float PixelFilter<false>::operator() (float* data, float x) const
+float PixelFilter<false>::operator() (float* data, float x, const int width) const
 {
-    float alpha = frac(x);
-    float xb = x - 0.5f;
+    float xb = fmaxf(0.f, x - 0.5f);
+
+    float alpha = frac(xb);
+
     int i = floorf(xb);
+    int ip = fminf(i+1, width-1);
 
-    float v = (1.f - alpha)*data[i] + alpha * data[i+1]; //expected overflow
+    return (1.f - alpha)*data[i] + alpha * data[ip];
+}
 
-    return v;
+template<>
+__device__ __host__
+float PixelFilter<false>::operator ()(float* data, float x, float y, const int width, const int height) const
+{
+    float xb = x - 0.5f;
+    float yb = y - 0.5f;
+
+    xb =  fmaxf(0.f, xb);
+    yb =  fmaxf(0.f, yb);
+
+    float alpha = frac(xb);
+    float beta  = frac(yb);
+
+    int i = floorf(xb);
+    int j = floorf(yb);
+
+    int ip = fminf(i+1, width-1);
+    int jp = fminf(j+1, height-1);
+
+
+    return (1.f - alpha) * (1.f - beta)  * data[i  + width * j ] +
+           alpha * (1.f - beta)          * data[ip + width * j ] +
+            (1.f - alpha) * beta         * data[i  + width * jp] +
+             alpha * beta                * data[ip + width * jp];
 }
 
 
@@ -169,29 +196,19 @@ class MemoryTraverser : public Managed
 {
 public:
 
-    __host__ __device__ T get1D(T *src, float x, const int size)
+    __host__ __device__ T get1D(T *src, float x)
     {
-        T i = addressingFunctor(x, size, 0, size);
-
-        //point filtering
-        //i = floorf(i);
-        //T v = src[(int)i];
-        //return v;
-        return filteringFunctor(src, i);
+        T i = addressingFunctor(x, width, 0, width);
+        return filteringFunctor(src, i, width);
     }
 
     //TODO:: put the sizes as members
-    __host__ __device__ T get2D(T *src, float x, float y, const int x_size, const int y_size)
+    __host__ __device__ T get2D(T *src, float x, float y)
     {
-        T i = addressingFunctor(x, x_size, 0, x_size);
-        T j = addressingFunctor(y, y_size, 0, y_size);
+        T i = addressingFunctor(x, width, 0, width);
+        T j = addressingFunctor(y, height, 0, height);
 
-        //This is point filtering;
-        //i = floorf(i);
-        //j = floorf(j);
-        //T v = src[(int)(i + x_size*j)];
-        //return v;
-        return filteringFunctor(src, i, j, x_size);
+        return filteringFunctor(src, i, j, width, height);
     }
 
 
@@ -199,6 +216,10 @@ public:
     AddressingModeFunctor addressingFunctor;
     FilteringFunctor filteringFunctor;
 
+    int width;
+    int height;
+
+    //not required
     cuMemoryAddresMode addressMode;
     cuMemoryFilterMode filterMode;
     int normalized;

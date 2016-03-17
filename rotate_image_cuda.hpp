@@ -82,6 +82,28 @@ CImg<T> rotate_cuda(const std::string& filename,
     cudaCheckError();
     cudaSafeCall(cudaDeviceSynchronize());
 
+    //TIMING
+    cudaEvent_t start, stop;
+    cudaSafeCall(cudaEventCreate(&start));
+    cudaSafeCall(cudaEventCreate(&stop));
+
+    const int NTimes = 250;
+    cudaEventRecord(start);
+    for (int i = 0; i < NTimes; i++)
+    {
+        transformKernel<float><<<dimGrid, dimBlock, 0>>>(d_data, width, height, angle);
+    }
+    cudaEventRecord(stop);
+
+    cudaEventSynchronize(stop);
+    float miliseconds = 0;
+    cudaEventElapsedTime(&miliseconds, start, stop);
+    std::cout << "CUDA TIME: " << miliseconds / (float)NTimes << " ms" <<std::endl;
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+
     //get back the results on host.
     cudaSafeCall(cudaMemcpy(d, d_data, size, cudaMemcpyDeviceToHost));
 
