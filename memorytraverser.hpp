@@ -21,7 +21,7 @@ enum COORDS_TYPE
 
 //AddresModeFunctors
 template<enum COORDS_TYPE>
-class Wrap
+struct Wrap
 {
 public:
     //This work only for forward wrapping if we move backward it fails.
@@ -52,7 +52,7 @@ float Wrap<NORMALIZED>::operator ()(float x, float upper, float lower, float ran
 }
 
 template<enum COORDS_TYPE>
-class Clamp
+struct Clamp
 {
 public:
     __device__ __host__ float operator() (float x, float upper, float lower, float range) const
@@ -200,7 +200,7 @@ float PixelFilter<LINEAR>::operator ()(float* data, float x, float y, const int 
 //};
 
 template <typename T, typename AddressingModeFunctor, typename FilteringFunctor>
-class MemoryTraverser// : public Managed
+struct MemoryTraverser// : public Managed
 {
 public:
 
