@@ -14,7 +14,7 @@ using namespace cimg_library;
 
 template<typename T, typename TraverserType>
 __global__ void transformKernel(T* outputData,
-                                T* inputData,
+                                T* sourceData,
                                 int width,
                                 int height,
                                 T theta,
@@ -33,7 +33,7 @@ __global__ void transformKernel(T* outputData,
     tv /= (T)height;
 
     // read from texture and write to global memory
-    T val = mt->get2D(inputData, tu + 0.5f, tv + 0.5f);
+    T val = mt->get2D(sourceData, tu + 0.5f, tv + 0.5f);
 
     outputData[y*width + x] = val;
 }
@@ -56,24 +56,29 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     cudaSafeCall(cudaMemcpy(d_input, d, size, cudaMemcpyHostToDevice));
 
     //prepare memory traverser;
-    TraverserType* d_mt;
-    TraverserType h_mt;
-    h_mt.width = width;
-    h_mt.height = height;
+    TraverserType* d_mt = nullptr;
+    {
+        TraverserType host_traverser;
+        host_traverser.width = width;
+        host_traverser.height = height;
 
-    cudaSafeCall(cudaMalloc((void**)&d_mt, sizeof(TraverserType)));
-    cudaSafeCall(cudaMemcpy(d_mt, &h_mt, sizeof(TraverserType), cudaMemcpyHostToDevice));
 
+        cudaSafeCall(cudaMalloc((void**)&d_mt, sizeof(TraverserType)));
+        cudaSafeCall(cudaMemcpy(d_mt, &host_traverser, sizeof(TraverserType), cudaMemcpyHostToDevice));
+    }
 
     //call kernel
     dim3 dimBlock(8, 8, 1);
     dim3 dimGrid(width / dimBlock.x, height / dimBlock.y, 1);
 
-    transformKernel<T><<<dimGrid, dimBlock, 0>>>(d_output, d_input,
+    transformKernel<T><<<dimGrid, dimBlock, 0>>>(d_output,
+                                                 d_input,
                                                  width, height, angle,
                                                  d_mt);
     cudaCheckError();
     cudaSafeCall(cudaDeviceSynchronize());
+
+
 
     //TIMING
     cudaEvent_t start, stop;
@@ -84,7 +89,8 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     cudaEventRecord(start);
     for (int i = 0; i < NTimes; i++)
     {
-        transformKernel<T><<<dimGrid, dimBlock, 0>>>(d_output, d_input,
+        transformKernel<T><<<dimGrid, dimBlock, 0>>>(d_output,
+                                                     d_input,
                                                      width, height, angle,
                                                      d_mt);
     }
@@ -107,6 +113,7 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     cudaSafeCall(cudaFree(d_output));
     cudaSafeCall(cudaFree(d_mt));
 
+
     //image.normalize(0, 255);
     image.save("data/custom_result.pgm");
     return image;
@@ -122,17 +129,17 @@ CImg<T> rotate_custom(const std::string& filename,
                                     int normalization)
 {
     //This defines the behaviour
-    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<true>,  PixelFilter<true>>;
-    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<false>, PixelFilter<true>>;
+    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<NORMALIZED>,  PixelFilter<NEAREST>>;
+    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<NEAREST>>;
 
-    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<true>, PixelFilter<false>>;
-    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<false>, PixelFilter<false>>;
+    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<LINEAR>>;
 
-    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<true>, PixelFilter<true>>;
-    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<false>, PixelFilter<true>>;
+    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<NEAREST>>;
+    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<NEAREST>>;
 
-    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<true>, PixelFilter<false>>;
-    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<false>, PixelFilter<false>>;
+    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<LINEAR>>;
 
     if(filterMode == cudaFilterModePoint)
     {

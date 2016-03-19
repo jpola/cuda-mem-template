@@ -13,8 +13,14 @@ enum cuMemoryFilterMode
     cuFilterModeLinear = 1
 };
 
+enum COORDS_TYPE
+{
+    NON_NORMALIZED = 0,
+    NORMALIZED = 1,
+};
+
 //AddresModeFunctors
-template<bool NORMALIZED>
+template<enum COORDS_TYPE>
 class Wrap
 {
 public:
@@ -29,7 +35,7 @@ public:
 
 template<>
 __device__ __host__
-float Wrap<false>::operator ()(float x, float upper, float lower, float range) const
+float Wrap<NON_NORMALIZED>::operator ()(float x, float upper, float lower, float range) const
 {
     //assert(false); //is it wise to use wrapping on non normalized coords?;
     float  r = upper - lower;
@@ -39,13 +45,13 @@ float Wrap<false>::operator ()(float x, float upper, float lower, float range) c
 
 template<>
 __device__ __host__
-float Wrap<true>::operator ()(float x, float upper, float lower, float range) const
+float Wrap<NORMALIZED>::operator ()(float x, float upper, float lower, float range) const
 {
     //optimized with 1.f as r see general
     return range* (x - floorf(x));
 }
 
-template<bool NORMALIZED>
+template<enum COORDS_TYPE>
 class Clamp
 {
 public:
@@ -59,7 +65,7 @@ public:
 
 template<>
 __device__ __host__
-float Clamp<true>::operator ()(float x, float upper, float lower, float range) const
+float Clamp<NORMALIZED>::operator ()(float x, float upper, float lower, float range) const
 {
     //TODO:: optimization to one line would be great!
     float d = 1.f / range;
@@ -80,26 +86,28 @@ float Clamp<true>::operator ()(float x, float upper, float lower, float range) c
 
 template<>
 __device__ __host__
-float Clamp<false>::operator ()(float x, float upper, float lower, float range) const
+float Clamp<NON_NORMALIZED>::operator ()(float x, float upper, float lower, float range) const
 {
     return fminf(range-1, fmaxf(lower, x));
 }
 
 __host__ __device__ inline float frac(float x)
 {
-        float frac, tmp = x - (float)(int)(x);
-        float frac256 = (float)(int)( tmp*256.0f + 0.5f );
-        frac = frac256 / 256.0f;
-        return frac;
-
-//    float frac_part, int_part;
-//    frac_part = modf(x, &int_part);
-//    return frac_part;
+    float frac, tmp = x - (float)(int)(x);
+    float frac256 = (float)(int)( tmp*256.0f + 0.5f );
+    frac = frac256 / 256.0f;
+    return frac;
 }
 
 // MODE = true  - nearest pixel
 // MODE = false - linear
-template<bool MODE>
+enum FILTER_MODE
+{
+    NEAREST = 0,
+    LINEAR = 1
+};
+
+template<enum FILTER_MODE>
 class PixelFilter
 {
 public:
@@ -119,14 +127,14 @@ public:
 //PixelMode specialization
 template<>
 __device__ __host__
-float PixelFilter<true>::operator ()(float* data, float x, const int width) const
+float PixelFilter<NEAREST>::operator ()(float* data, float x, const int width) const
 {
     return data [(int)floorf(x)];
 }
 
 template<>
 __device__ __host__
-float PixelFilter<true>::operator ()(float* data, float x, float y, const int width, const int height) const
+float PixelFilter<NEAREST>::operator ()(float* data, float x, float y, const int width, const int height) const
 {
     return data [(int)(floorf(x) + floorf(y)*width)];
 }
@@ -134,7 +142,7 @@ float PixelFilter<true>::operator ()(float* data, float x, float y, const int wi
 //Linear interpolation
 template<>
 __device__ __host__
-float PixelFilter<false>::operator() (float* data, float x, const int width) const
+float PixelFilter<LINEAR>::operator() (float* data, float x, const int width) const
 {
     float xb = fmaxf(0.f, x - 0.5f);
 
@@ -148,7 +156,7 @@ float PixelFilter<false>::operator() (float* data, float x, const int width) con
 
 template<>
 __device__ __host__
-float PixelFilter<false>::operator ()(float* data, float x, float y, const int width, const int height) const
+float PixelFilter<LINEAR>::operator ()(float* data, float x, float y, const int width, const int height) const
 {
     float xb = x - 0.5f;
     float yb = y - 0.5f;
@@ -167,32 +175,32 @@ float PixelFilter<false>::operator ()(float* data, float x, float y, const int w
 
 
     return (1.f - alpha) * (1.f - beta)  * data[i  + width * j ] +
-           alpha * (1.f - beta)          * data[ip + width * j ] +
+            alpha * (1.f - beta)          * data[ip + width * j ] +
             (1.f - alpha) * beta         * data[i  + width * jp] +
-             alpha * beta                * data[ip + width * jp];
+            alpha * beta                * data[ip + width * jp];
 }
 
 
 //This allows me to use new operator to use class directly on gpu;
 //Otherwise do host device copy flow to put the class on GPU
-class Managed
-{
-public:
-    void *operator new(size_t len) {
-        void *ptr;
-        cudaMallocManaged(&ptr, len);
-        cudaDeviceSynchronize();
-        return ptr;
-    }
-
-    void operator delete(void *ptr) {
-        cudaDeviceSynchronize();
-        cudaFree(ptr);
-    }
-};
+//class Managed
+//{
+//public:
+//    void *operator new(size_t len) {
+//        void *ptr;
+//        cudaMallocManaged(&ptr, len);
+//        cudaDeviceSynchronize();
+//        return ptr;
+//    }
+//
+//    void operator delete(void *ptr) {
+//        cudaDeviceSynchronize();
+//        cudaFree(ptr);
+//    }
+//};
 
 template <typename T, typename AddressingModeFunctor, typename FilteringFunctor>
-class MemoryTraverser : public Managed
+class MemoryTraverser// : public Managed
 {
 public:
 
@@ -225,12 +233,29 @@ public:
     int normalized;
 };
 
+
+//THIS IS SOMEHOW NOT WORKING during kernel call it throws illegal device address;
+//template<typename TraverserType>
+//inline
+//TraverserType* create_memory_traverser(const int width, const int height = 0)
+//{
+//    TraverserType host_traverser;
+//    host_traverser.width = width;
+//    host_traverser.height = height;
+
+//    TraverserType* device_traverser;
+
+//    cudaSafeCall(cudaMalloc((void**)&device_traverser, sizeof(TraverserType)));
+//    cudaSafeCall(cudaMemcpy(device_traverser, &host_traverser, sizeof(TraverserType), cudaMemcpyHostToDevice));
+//    return device_traverser;
+//}
+
 // something like that could be used for kernel calls
 // It may determine the proper type of the memoryTraverser
-template<typename Function, typename... Args>
-void Launcher(Args&&... args)
-{
-    return Function(std::forward<Args>(args)...);
-}
+//template<typename Function, typename... Args>
+//void Launcher(Args&&... args)
+//{
+//    return Function(std::forward<Args>(args)...);
+//}
 
 #endif // MEMORYTRAVERSER_HPP

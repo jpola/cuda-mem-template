@@ -98,17 +98,17 @@ void moving_average_tr(float *dst, float *src, const int N, const int R,
                        int normalization)
 {
     //This defines the behaviour
-    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<true>,  PixelFilter<true>>;
-    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<false>, PixelFilter<true>>;
+    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<NORMALIZED>,  PixelFilter<NEAREST>>;
+    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<NEAREST>>;
 
-    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<true>, PixelFilter<false>>;
-    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<false>, PixelFilter<false>>;
+    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<LINEAR>>;
 
-    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<true>, PixelFilter<true>>;
-    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<false>, PixelFilter<true>>;
+    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<NEAREST>>;
+    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<NEAREST>>;
 
-    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<true>, PixelFilter<false>>;
-    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<false>, PixelFilter<false>>;
+    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<LINEAR>>;
 
     if(filterMode == cudaFilterModePoint)
     {
