@@ -1,0 +1,144 @@
+
+import SCons.Tool
+import SCons.Scanner.C
+import SCons.Defaults
+from SCons.Script import *
+
+from subprocess import Popen, PIPE
+
+
+# create a SCons environment
+env = Environment()
+
+def TOOL_HIP(env):
+  
+    hip_suffixes=['.hip.cpp']
+    
+    # Here we should put some code to find the hip. I have it visible in whole env
+
+    result = Popen(['hipconfig','-C'], stdout=PIPE).communicate()[0]
+    print "HIP Compiler : ", result
+    result = Popen(['hipconfig','-P'], stdout=PIPE).communicate()[0]
+    print "HIP Platform : ", result
+
+    result = Popen(['hipconfig','--path'], stdout=PIPE).communicate()[0]
+    print "HIP Config path: ", result
+
+    hip_bin = result + '/bin'
+    hip_include = result + '/include'
+    hipcc= result + '/bin/hipcc'
+
+    
+    #dc required when we want __device__ functions to be implemented in separate source files
+    env['HIPFLAGS'] = ["--std=c++11", "-dc"]
+    
+    env['HIPDEFINES'] = SCons.Util.CLVar()
+    env['HIPDEFPREFIX'] = '-D'
+    env['HIPDEFSUFFIX'] = ''
+    env['_HIPDEFFLAGS'] = '${_concat(HIPDEFPREFIX, HIPDEFINES, HIPSUFFIX, __env__)}'
+
+    env['HIPCPPPATH'] = ['#']
+    env['HIPINCPREFIX'] = '-I'
+    env['HIPINCSUFFIX'] = ''
+    env['_HIPINCFLAGS'] = '${_concat(HIPINCPREFIX, HIPCPPPATH, HIPINCSUFFIX, __env__, RDirs, TARGET, SOURCE)}'
+
+    env['HIP_DEBUGOPT'] = SCons.Util.CLVar()
+    env['HIP_EXTRAFLAGS'] = SCons.Util.CLVar()
+
+    env.Append(HIP_EXTRAFLAGS = "-D__HCC__");
+    env.PrependUnique(HIPCPPPATH = hip_include)
+    env.PrependENVPath('PATH', hip_bin)
+    
+    env['HIPCC'] = 'hipcc'
+    env['HIPCCCOM'] = '$HIPCC $HIP_ARCHFLAGS $HIPFLAGS $_HIPINCFLAGS $_HIPDEFFLAGS $HIP_DEBUGOPT $HIP_EXTRAFLAGS -c $SOURCES -o $TARGET'
+
+    #Add custom hip builder
+    action='$HIPCCCOM'
+    hip_suffix = '.hip.cpp' #name of the HIP specific source files
+    hipbuilder = Builder(action=action, src_suffix=hip_suffix, suffix='$OBJSUFFIX', prefix='$OBJPREFIX')
+    env['BUILDERS']['HipObj'] = hipbuilder
+    
+    static_obj, shared_obj = SCons.Tool.createObjBuilders(env)
+    static_obj.add_action(hip_suffix, action)
+    shared_obj.add_action(hip_suffix, action)
+    shared_obj.add_emitter(hip_suffix, SCons.Defaults.SharedObjectEmitter)
+
+    #Dependency scanner search for cpp / cxx and hpp, hxx dependencies not .c and .h
+    class HIPScanner(SCons.Scanner.ClassicCPP): 
+        """
+        Use a variant of the usual CPP scanner to find header files in .hip.cpp/cxx files
+        Need this variant because hcc looks in the compiler's invocation dir
+        as well as source file's dir, which ClassicCPP doesn't handle.
+        """
+        def find_include(self, include, source_dir, path):
+            if include[0] == '"':
+            # Prepend top dir here for hcc
+                paths = (Dir('#'),) + (source_dir,) + tuple(path)
+            else:
+                paths = tuple(path) + (source_dir,)
+    
+            n = SCons.Node.FS.find_file(include[1], paths)
+            #print "Finding include file %s in %s: %s"%(include, map(str, paths), n)
+            i = SCons.Util.silent_intern(include[1])
+            return n, i
+
+    CScanner = HIPScanner("HIPScanner", env['CPPSUFFIXES'] + ['.hip.cpp'], 
+                           "HIPCPPPATH",
+                           '^[ \t]*#[ \t]*(?:include|import)[ \t]*(<|")([^>"]+)(>|")')
+    
+    SourceFileScanner.add_scanner(hip_suffix, CScanner)
+
+
+
+#Main SCons script code
+#Change the platform here for hcc
+os.environ['HIP_PLATFORM'] = 'hcc'
+#Update env with our custom builders
+TOOL_HIP(env)
+
+# Add the appropriate hip/hcc library paths to the LIBPATH
+env.Append(LIBPATH  = ['/opt/hcc/lib'])
+env['CPPDEFINES'] = '__HCC__'
+#env['HIP
+env.PrependUnique(CPPPATH= ['/home/jpola/External/HIP/include', '/opt/hcc/include'])
+env.Append(CPPFLAGS = ["--std=c++11"]);
+
+
+
+# Link c++ runtime
+# 'stdc++' is for c++, pthread for c++ 11
+env.Append(LIBS = ['stdc++', 'pthread', 'm', 'X11'])
+
+# set flags for release/debug
+flags = ['-O3']
+nvflags = []
+mode = 'release'
+
+if ARGUMENTS.get('mode'):
+  mode = ARGUMENTS['mode']
+if mode == 'release':
+  flags = ['-O3']
+elif mode == 'debug':
+  flags = ['-g']
+
+env.Append(CFLAGS = flags)
+env.Append(CXXFLAGS = flags)
+env.Append(HIPFLAGS = flags)
+
+#link with hipcc 
+env.Replace(LINK='hipcc')
+
+# Now create the program program
+sources = ['main.cpp',
+    'memorytraverser.hip.cpp',
+    'rotate_image_custom.hip.cpp',
+    ]
+
+env.Program('hip-traverser', sources)
+
+#
+#g++ -o main.o -c -O3 --std=c++11 -D__HCC__ -I/home/jpola/External/HIP/include -I/opt/hcc/include main.cpp
+#hipcc --std=c++11 -dc -O3 -D__HCC__ -I/home/jpola/External/HIP/include -I. -c memorytraverser.hip.cpp -o memorytraverser.o
+#hipcc --std=c++11 -dc -O3 -D__HCC__ -I/home/jpola/External/HIP/include -I. -c rotate_image_custom.hip.cpp -o rotate_image_custom.o
+#hipcc -v -D__HCC__ -o hip-traverser main.o memorytraverser.o rotate_image_custom.o -L/opt/hcc/lib -lstdc++ -lpthread -lm -lX11
+
