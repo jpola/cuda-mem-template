@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
 #include <iostream>
 #include <algorithm>
+#include <cassert>
 #include <numeric>
 #include <cmath>
 
@@ -116,9 +117,9 @@ bool test_rotate(const float angle,
 
     std::string lena_path = "data/lena_bw.pgm";//"data/img0008.pgm";
     cimg_library::CImg<T> ci =
-            cuda_rotate::rotate_cuda<T>(lena_path, angle, filterMode, addressMode, normalization);
+            rotate_cuda(lena_path, angle, filterMode, addressMode, normalization);
     cimg_library::CImg<T> mi =
-            custom_rotate::rotate_custom<T>(lena_path, angle, filterMode, addressMode, normalization);
+            rotate_custom(lena_path, angle, filterMode, addressMode, normalization);
 
     cimg_library::CImg<T> diff =  ci - mi;
     //diff.abs();

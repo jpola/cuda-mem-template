@@ -69,7 +69,7 @@ def TOOL_CUDA(env):
       
       # set the include path, and pass both c compiler flags and c++ compiler flags
       env['NVCCFLAGS'] = SCons.Util.CLVar('')
-      env.Append(NVCCFLAGS = "--std=c++11")
+      env.Append(NVCCFLAGS = ["--std=c++11", "-dc"])
       #env.Append(NVCCFLAGS = ['-gencode=arch=compute_30,code=sm_30'])
       env['SHNVCCFLAGS'] = SCons.Util.CLVar('') + ' -shared'
 
@@ -153,7 +153,7 @@ def TOOL_HIP(env):
 
     #Now we have to define all of above $ params
     env['HIPDEFINES'] = '__HIP_PLATFORM_NVCC__'
-    env['HIPFLAGS'] = ["--std=c++11"]
+    env['HIPFLAGS'] = ["--std=c++11", "-dc"]
 
     env['HIPDEFPREFIX'] = '-D'
     env['HIPDEFSUFFIX'] = ''
@@ -223,13 +223,13 @@ os.environ['HIP_PLATFORM'] = 'nvcc'
 print "About to run TOOL CUDA"
 TOOL_CUDA(env)
 #print "About to run HIP TOOL"
-#TOOL_HIP(env)
+TOOL_HIP(env)
 
 # Add the CUDA library paths to the LIBPATH
 env.Append(LIBPATH  = ['/usr/local/cuda/lib64'])
 env.PrependUnique(CPPPATH= '/usr/local/cuda/include/')
 env.PrependUnique(NVCCCPPPATH='/usr/local/cuda/include/')
-
+env.Append(CPPFLAGS = ["--std=c++11"]);
 
 # Link to cuda runtime and c++ runtime
 # 'stdc++' is for c++, pthread for c++ 11
@@ -258,8 +258,16 @@ env.Append(CXXFLAGS = flags)
 env.Append(NVCCFLAGS = nvflags)
 env.Append(HIPFLAGS = flags)
 
+env.Replace(LINK='hipcc')
+
 # Now create the program program
-sources = ['main.cu']
+sources = ['main.cpp',
+    'memorytraverser.hip.cpp',
+    'moving_average_custom.hip.cpp',
+    'moving_average_cuda.cu',
+    'rotate_image_custom.hip.cpp',
+    'rotate_image_cuda.cu'
+    ]
 
 env.Program('cuda-template', sources)
 
