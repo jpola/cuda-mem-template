@@ -13,7 +13,7 @@
 
 template<typename T, typename S>
 inline bool
-compareData(cimg_library::CImg<T>&diff_image, const S epsilon, const float threshold)
+compareData(const cimg_library::CImg<T>&diff_image, const S epsilon, const float threshold)
 {
     assert(epsilon >= 0);
 
@@ -115,29 +115,35 @@ bool test_rotate(const float angle,
                  int normalization)
 {
 
-    std::string lena_path = "data/img0008.pgm";
-    cimg_library::CImg<T> ci =
+    std::string lena_path = "data/lena_bw.pgm";
+    cimg_library::CImg<T> cuda_image =
             rotate_cuda(lena_path, angle, filterMode, addressMode, normalization);
-    cimg_library::CImg<T> mi =
+    cimg_library::CImg<T> custom_image =
             rotate_custom(lena_path, angle, filterMode, addressMode, normalization);
 
-    cimg_library::CImg<T> diff =  ci - mi;
-    //diff.abs();
-
-    //bool result = false;
     bool result = true;
-    //int index = 0;
+
+    cimg_library::CImg<T> difference =  custom_image - cuda_image;
+    //difference.abs();
 
     //five percent;
     float treshold = 0.05f;
-    result = compareData(diff, 5e-2f, treshold);
+    result = compareData(difference, 5e-2f, treshold);
 
-    diff.normalize(0, 255);
-    diff.save("data/diff.pgm");
+    //calculate rms
+    double sum = 0;
+    for (auto p : difference)
+    {
+        sum += p*p;
+    }
 
+    sum /= difference.size();
+    auto rms = sqrt(sum);
 
+    std::cout << "RMS: " << rms << std::endl;
+    difference.normalize(0.f, 255.f);
+    difference.save("data/diff.pgm");
     return result;
-
 }
 
 int main(int argc, char *argv[])
