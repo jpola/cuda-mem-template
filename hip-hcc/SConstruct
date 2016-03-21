@@ -45,7 +45,7 @@ def TOOL_HIP(env):
     env['HIP_DEBUGOPT'] = SCons.Util.CLVar()
     env['HIP_EXTRAFLAGS'] = SCons.Util.CLVar()
 
-    env.Append(HIP_EXTRAFLAGS = "-D__HCC__");
+    env.Append(HIP_EXTRAFLAGS = "-D__NVCC__");
     env.PrependUnique(HIPCPPPATH = hip_include)
     env.PrependENVPath('PATH', hip_bin)
     
@@ -92,13 +92,13 @@ def TOOL_HIP(env):
 
 #Main SCons script code
 #Change the platform here for hcc
-os.environ['HIP_PLATFORM'] = 'hcc'
+os.environ['HIP_PLATFORM'] = 'nvcc'
 #Update env with our custom builders
 TOOL_HIP(env)
 
 # Add the appropriate hip/hcc library paths to the LIBPATH
 env.Append(LIBPATH  = ['/opt/hcc/lib'])
-env['CPPDEFINES'] = '__HCC__'
+env['CPPDEFINES'] = '__NVCC__'
 #env['HIP
 env.PrependUnique(CPPPATH= ['/home/jpola/External/HIP/include', '/opt/hcc/include'])
 env.Append(CPPFLAGS = ["--std=c++11"]);
@@ -130,7 +130,6 @@ env.Replace(LINK='hipcc')
 
 # Now create the program program
 sources = ['main.cpp',
-    'memorytraverser.hip.cpp',
     'rotate_image_custom.hip.cpp',
     ]
 

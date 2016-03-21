@@ -262,7 +262,6 @@ env.Replace(LINK='hipcc')
 
 # Now create the program program
 sources = ['main.cpp',
-    'memorytraverser.hip.cpp',
     'moving_average_custom.hip.cpp',
     'moving_average_cuda.cu',
     'rotate_image_custom.hip.cpp',

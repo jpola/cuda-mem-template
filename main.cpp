@@ -115,7 +115,7 @@ bool test_rotate(const float angle,
                  int normalization)
 {
 
-    std::string lena_path = "data/lena_bw.pgm";//"data/img0008.pgm";
+    std::string lena_path = "data/img0008.pgm";
     cimg_library::CImg<T> ci =
             rotate_cuda(lena_path, angle, filterMode, addressMode, normalization);
     cimg_library::CImg<T> mi =

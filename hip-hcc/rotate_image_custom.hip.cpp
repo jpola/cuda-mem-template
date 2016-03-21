@@ -124,17 +124,17 @@ CImg<float> rotate_custom(const std::string& filename,
 {
     typedef float T;
     //This defines the behaviour
-    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<NORMALIZED>,  PixelFilter<NEAREST>>;
-    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<NEAREST>>;
+    using TraverserClampNormPixel = MemoryTraverser<float, Clamp<NORMALIZED,float>,  PixelFilter<NEAREST,float>>;
+    using TraverserClampUNormPixel = MemoryTraverser<float, Clamp<NON_NORMALIZED,float>, PixelFilter<NEAREST,float>>;
 
-    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<NORMALIZED>, PixelFilter<LINEAR>>;
-    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<NON_NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserClampNormLinear = MemoryTraverser<float, Clamp<NORMALIZED,float>, PixelFilter<LINEAR,float>>;
+    using TraverserClampUNormLinear = MemoryTraverser<float, Clamp<NON_NORMALIZED,float>, PixelFilter<LINEAR,float>>;
 
-    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<NEAREST>>;
-    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<NEAREST>>;
+    using TraverserWrapNormPixel = MemoryTraverser<float, Wrap<NORMALIZED,float>, PixelFilter<NEAREST,float>>;
+    using TraverserWrapUNormPixel = MemoryTraverser<float, Wrap<NON_NORMALIZED,float>, PixelFilter<NEAREST,float>>;
 
-    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<NORMALIZED>, PixelFilter<LINEAR>>;
-    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<NON_NORMALIZED>, PixelFilter<LINEAR>>;
+    using TraverserWrapNormLinear = MemoryTraverser<float, Wrap<NORMALIZED,float>, PixelFilter<LINEAR,float>>;
+    using TraverserWrapUNormLinear = MemoryTraverser<float, Wrap<NON_NORMALIZED,float>, PixelFilter<LINEAR,float>>;
 
     //pick one from above;
     return rotate_custom_impl<T, TraverserWrapNormLinear>(filename, angle);
