@@ -81,7 +81,7 @@ CImg<float> rotate_cuda(const std::string& filename,
     cudaSafeCall(cudaEventCreate(&start));
     cudaSafeCall(cudaEventCreate(&stop));
 
-    const int NTimes = 250;
+    const int NTimes = 1;
     cudaEventRecord(start);
     for (int i = 0; i < NTimes; i++)
     {

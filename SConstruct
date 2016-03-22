@@ -69,8 +69,8 @@ def TOOL_CUDA(env):
       
       # set the include path, and pass both c compiler flags and c++ compiler flags
       env['NVCCFLAGS'] = SCons.Util.CLVar('')
-      env.Append(NVCCFLAGS = ["--std=c++11", "-dc"])
-      #env.Append(NVCCFLAGS = ['-gencode=arch=compute_30,code=sm_30'])
+      env.Append(NVCCFLAGS = ["--std=c++11"])
+      env.Append(NVCCFLAGS = ['-gencode=arch=compute_30,code=sm_30', '-Xptxas', '-dlcm=cg'])
       env['SHNVCCFLAGS'] = SCons.Util.CLVar('') + ' -shared'
 
       env['NVCCCPPPATH'] = ['#']
@@ -153,7 +153,7 @@ def TOOL_HIP(env):
 
     #Now we have to define all of above $ params
     env['HIPDEFINES'] = '__HIP_PLATFORM_NVCC__'
-    env['HIPFLAGS'] = ["--std=c++11", "-dc"]
+    env['HIPFLAGS'] = ["--std=c++11", '-gencode=arch=compute_30,code=sm_30', '-Xptxas', '-dlcm=cg']
 
     env['HIPDEFPREFIX'] = '-D'
     env['HIPDEFSUFFIX'] = ''

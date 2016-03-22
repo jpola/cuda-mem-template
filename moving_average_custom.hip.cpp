@@ -11,7 +11,7 @@ inline int iDivUp(int a, int b)
 //Each new kernel have to be template to pass MemoryTraverser
 //instead of using tex, we have to pass src as an additional param
 template<typename TraverserType>
-__global__ void moving_average_tr_kernel(hipLaunchParm lp, float* dst, float* src, const int N, const int R,
+__global__ void moving_average_tr_kernel(hipLaunchParm lp, float* dst, float*__restrict__ src, const int N, const int R,
                                          TraverserType* mt)
 {
     const int tid = hipThreadIdx_x + hipBlockIdx_x * hipBlockDim_x;

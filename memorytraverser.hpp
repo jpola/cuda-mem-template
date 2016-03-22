@@ -2,6 +2,15 @@
 #define MEMORYTRAVERSER_HPP
 #include <assert.h>
 
+template<typename T>
+__device__ __forceinline__ T ldg(const T* ptr) {
+#if __CUDA_ARCH__ >= 350
+    return __ldg(ptr);
+#else
+    return *ptr;
+#endif
+}
+
 enum COORDS_TYPE
 {
     NON_NORMALIZED = 0,
@@ -116,10 +125,10 @@ class PixelFilter
 {
 public:
     __device__ __host__
-    T operator() (T* data, T x, const int width) const;
+    T operator() (const T* __restrict__ data, T x, const int width) const;
 
     __device__ __host__
-    T operator() (T* data, T x, T y, const int width, const int height) const;
+    T operator() (const T* __restrict__ data, T x, T y, const int width, const int height) const;
 };
 
 template<typename T>
@@ -127,15 +136,15 @@ class PixelFilter<NEAREST, T>
 {
 public:
     __device__ __host__
-    T operator() (T* data, T x, const int width) const
+    T operator() ( const T* __restrict__ data, T x, const int width) const
     {
-        return data [(int)floorf(x)];
+        return ldg(&data [(int)floorf(x)]);
     }
 
     __device__ __host__
-    T operator() (T* data, T x, T y, const int width, const int height) const
+    T operator() (const T* __restrict__ data, T x, T y, const int width, const int height) const
     {
-        return data [(int)(floorf(x) + floorf(y)*width)];
+        return ldg(&data[(int)(floorf(x) + floorf(y)*width)]);
     }
 };
 
@@ -144,7 +153,7 @@ class PixelFilter<LINEAR, T>
 {
 public:
     __device__ __host__
-    T operator() (T* data, T x, const int width) const
+    T operator() (const T* __restrict__ data, T x, const int width) const
     {
         float xb = fmaxf(0.f, x - 0.5f);
 
@@ -153,11 +162,11 @@ public:
         int i = floorf(xb);
         int ip = fminf(i+1, width-1);
 
-        return (1.f - alpha)*data[i] + alpha * data[ip];
+        return (1.f - alpha)*ldg(&data[i]) + alpha * ldg(&data[ip]);
     }
 
     __device__ __host__
-    T operator() (T* data, T x, T y, const int width, const int height) const
+    T operator() (const T* __restrict__ data, T x, T y, const int width, const int height) const
     {
         float xb = x - 0.5f;
         float yb = y - 0.5f;
@@ -175,10 +184,10 @@ public:
         int jp = fminf(j+1, height-1);
 
 
-        return (1.f - alpha) * (1.f - beta)  * data[i  + width * j ] +
-                alpha * (1.f - beta)         * data[ip + width * j ] +
-                (1.f - alpha) * beta         * data[i  + width * jp] +
-                alpha * beta                 * data[ip + width * jp];
+        return (1.f - alpha) * (1.f - beta)  * ldg(&data[i  + width * j ]) +
+                alpha * (1.f - beta)         * ldg(&data[ip + width * j ]) +
+                (1.f - alpha) * beta         * ldg(&data[i  + width * jp]) +
+                alpha * beta                 * ldg(&data[ip + width * jp]);
     }
 };
 
@@ -188,13 +197,13 @@ public:
 template <typename T, typename AddressingModeFunctor, typename FilteringFunctor>
 struct MemoryTraverser// : public Managed
 {
-    __host__ __device__ T get1D(T *src, float x)
+    __host__ __device__ T get1D(const T* __restrict__ src, float x)
     {
         T i = addressingFunctor(x, width, 0, width);
         return filteringFunctor(src, i, width);
     }
 
-    __host__ __device__ T get2D(T *src, float x, float y)
+    __host__ __device__ T get2D(const T* __restrict__ src, float x, float y)
     {
         T i = addressingFunctor(x, width, 0, width);
         T j = addressingFunctor(y, height, 0, height);

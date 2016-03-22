@@ -13,7 +13,7 @@ inline int iDivUp(int a, int b)
 template<typename T, typename TraverserType>
 __global__ void transformKernel(hipLaunchParm lp,
                                 T* outputData,
-                                T* sourceData,
+                                const T* __restrict__ sourceData,
                                 int width,
                                 int height,
                                 T theta,
@@ -82,7 +82,7 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     hipSafeCall(hipEventCreate(&start));
     hipSafeCall(hipEventCreate(&stop));
 
-    const int NTimes = 250;
+    const int NTimes = 1;
     hipEventRecord(start);
     for (int i = 0; i < NTimes; i++)
     {
