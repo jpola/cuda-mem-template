@@ -2,7 +2,7 @@
 #include <string>
 
 #include "cuda_errors.hpp"
-
+#define DIV_UP(x, y) ( (y) * ( ((x)+(y)-1) / (y) ) )
 //to hide global texture objects
 
 using namespace cimg_library;
@@ -36,10 +36,10 @@ __global__ void transformKernel(T* outputData,
 
 
 CImg<float> rotate_cuda(const std::string& filename,
-                 const float angle,
-                 cudaTextureFilterMode filterMode,
-                 cudaTextureAddressMode addressMode,
-                 int normalization)
+                        const float angle,
+                        cudaTextureFilterMode filterMode,
+                        cudaTextureAddressMode addressMode,
+                        int normalization)
 {
     typedef float T;
     CImg<T> image(filename.c_str());
@@ -49,13 +49,35 @@ CImg<float> rotate_cuda(const std::string& filename,
     unsigned int height = image.height();
 
     size_t size = width * height * sizeof(T);
+    T* dd;
+    size_t pitch;
+    cudaMallocPitch((void**)&dd, &pitch, width*sizeof(T), height);
+    cudaMemcpy2D(dd, pitch, d, width*sizeof(T), width*sizeof(T), height, cudaMemcpyHostToDevice);
+
+//    {
+//        int nDevices;
+//        cudaGetDeviceCount(&nDevices);
+
+//        cudaDeviceProp prop;
+//        cudaGetDeviceProperties(&prop, nDevices);
+
+
+//        size_t pitch_size =
+//                DIV_UP(width*sizeof(T), prop.textureAlignment)
+//                * prop.textureAlignment;
+
+//        std::cout << "PITCH " << pitch
+//                  << " MY PITCH: " << pitch_size << std::endl;
+
+//    }
+
 
     //prepare texture and allocate image on device;
     cudaChannelFormatDesc channelDesc =
             cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
     cudaArray *cuArray;
     cudaSafeCall(cudaMallocArray(&cuArray, &channelDesc, width, height));
-    cudaSafeCall(cudaMemcpyToArray(cuArray, 0, 0, d, size, cudaMemcpyHostToDevice));
+    cudaSafeCall(cudaMemcpy2DToArray(cuArray, 0, 0, dd, pitch, width*sizeof(T), height, cudaMemcpyDeviceToDevice));
 
     tex.addressMode[0] = addressMode;
     tex.addressMode[1] = addressMode;
@@ -81,7 +103,7 @@ CImg<float> rotate_cuda(const std::string& filename,
     cudaSafeCall(cudaEventCreate(&start));
     cudaSafeCall(cudaEventCreate(&stop));
 
-    const int NTimes = 1;
+    const int NTimes = 100;
     cudaEventRecord(start);
     for (int i = 0; i < NTimes; i++)
     {

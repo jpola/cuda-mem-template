@@ -2,6 +2,7 @@
 #include "rotate_image_custom.hpp"
 #include "memorytraverser.hpp"
 #include "hip_errors.hpp"
+#include "cuda_errors.hpp"
 
 using namespace cimg_library;
 
@@ -45,15 +46,33 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
 
     unsigned int width = image.width();
     unsigned int height = image.height();
-    size_t size = width * height * sizeof(T);
 
     //prepare input and output on device
     T* d_input;
     T* d_output;
-    hipSafeCall(hipMalloc((void**)&d_input, size));
-    hipSafeCall(hipMalloc((void**)&d_output, size));
-    hipSafeCall(hipMemcpy(d_input, d, size, hipMemcpyHostToDevice));
+    size_t line_bytes = width * sizeof(T);
+    size_t h_elems_per_line = width;
+    size_t pitch_bytes = line_bytes; //put proper here
+    size_t d_elems_per_line = pitch_bytes / sizeof(T);
 
+    size_t host_memory_size = line_bytes * height;
+    size_t devcie_memory_size = pitch_bytes * height;
+
+    hipSafeCall(hipMalloc((void**)&d_input, devcie_memory_size));
+    hipSafeCall(hipMalloc((void**)&d_output, devcie_memory_size));
+
+    for (int i = 0; i < height; i++)
+    {
+       // std::cout << image.at(i*width, -1) <<  " orig : " << image[i*width] << " " << d[i*width] << std::endl;
+
+        cudaError err = cudaMemcpy(&d_input[i*d_elems_per_line],
+                    &d[i*h_elems_per_line], line_bytes, cudaMemcpyHostToDevice);
+        if (err != cudaSuccess)
+        {
+            std::cerr << "Failed at i = " << i << " "<< d[i*h_elems_per_line] << std::endl;
+        }
+    }
+    cudaDeviceSynchronize();
     //prepare memory traverser;
     TraverserType* d_mt = nullptr;
     {
@@ -82,7 +101,7 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
     hipSafeCall(hipEventCreate(&start));
     hipSafeCall(hipEventCreate(&stop));
 
-    const int NTimes = 1;
+    const int NTimes = 100;
     hipEventRecord(start);
     for (int i = 0; i < NTimes; i++)
     {
@@ -103,7 +122,13 @@ CImg<T> rotate_custom_impl(const std::string& filename, const float angle)
 
 
     //copy back the data to host
-    hipSafeCall(hipMemcpy(d, d_output, size, hipMemcpyDeviceToHost));
+    //hipSafeCall(hipMemcpy(d, d_output, size, hipMemcpyDeviceToHost));
+    for (int i = 0; i < height; i++)
+    {
+  //       std::cout << " i " << i <<std::endl;
+        hipSafeCall(hipMemcpy(&d[i*h_elems_per_line],
+                    &d_output[i*d_elems_per_line], line_bytes, hipMemcpyDeviceToHost));
+    }
 
     //cleanup
     hipSafeCall(hipFree(d_input));

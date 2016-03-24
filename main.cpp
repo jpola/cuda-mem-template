@@ -21,13 +21,18 @@ compareData(const cimg_library::CImg<T>&diff_image, const S epsilon, const float
     unsigned int error_count = 0;
 
     auto len = diff_image.size();
-
+    int index = 0;
     for (auto p : diff_image)
     {
         float diff = p;
-        bool comp = (diff <= epsilon) && (diff >= -epsilon);
+        bool comp = diff < epsilon;
+//        if(!comp)
+//        {
+//            std::cout << diff << std::endl;
+//        }
         result &= comp;
         error_count += !comp;
+        index++;
     }
 
     if (threshold == 0.0f)
@@ -115,20 +120,20 @@ bool test_rotate(const float angle,
                  int normalization)
 {
 
-    std::string lena_path = "data/img0008.pgm";
-    cimg_library::CImg<T> cuda_image =
+    std::string lena_path = "data/lena_bw.pgm";
+    cimg_library::CImg<float> cuda_image =
             rotate_cuda(lena_path, angle, filterMode, addressMode, normalization);
-    cimg_library::CImg<T> custom_image =
+    cimg_library::CImg<float> custom_image =
             rotate_custom(lena_path, angle, filterMode, addressMode, normalization);
 
     bool result = true;
 
-    cimg_library::CImg<T> difference =  custom_image - cuda_image;
-    //difference.abs();
+    cimg_library::CImg<float> difference = cuda_image - custom_image;
+    difference.abs();
 
     //five percent;
     float treshold = 0.05f;
-    result = compareData(difference, 5e-2f, treshold);
+    result = compareData(difference, 1e-2f, treshold);
 
     //calculate rms
     double sum = 0;
@@ -149,7 +154,7 @@ bool test_rotate(const float angle,
 int main(int argc, char *argv[])
 {
 
-    cudaTextureFilterMode filterMode = cudaFilterModeLinear;
+    cudaTextureFilterMode filterMode = cudaFilterModePoint;
     cudaTextureAddressMode addressMode = cudaAddressModeWrap;
     int normalization = 1;
 
