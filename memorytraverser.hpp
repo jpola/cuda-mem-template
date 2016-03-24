@@ -142,53 +142,15 @@ public:
     __device__ __host__
     T operator() (const T* __restrict__ data, T x, const int width) const
     {
-        float xb = fmaxf(0.f, x - 0.5f);
-
-        float alpha = frac(xb);
-
-        int i = floorf(xb);
-        int ip = fminf(i+1, width-1);
-
-        return (1.f - alpha)*ldg(&data[i]) + alpha * ldg(&data[ip]);
+        assert(false);
+        return -1;
     }
 
     __device__ __host__
     T operator() (const T* __restrict__ data, T x, T y, const int width, const int height) const
     {
-        x -= 0.5f;
-        y -= 0.5f;
-
-        //clamp only
-        //x = fmaxf(fminf(x, width  - 1), 0);
-        //y = fmaxf(fminf(y, height - 1), 0);
-
-        //wrap do nothing
-
-
-        float alpha = frac(x);
-        float beta  = frac(y);
-
-        int i = floorf(x);
-        int j = floorf(y);
-
-        //wrap only
-        if (j < 0) { j += height; beta += 1.f; }
-        if (i < 0)  { i += width; alpha += 1.f; }
-
-
-        //clamp only
-//        int ip = max(min(i + 1, width -1), 0);
-//        int jp = max(min(j + 1, height - 1),0);
-
-        //wrap;
-        int ip = (i + 1) & (width - 1);
-        int jp = (j + 1) & (height - 1);
-
-
-        return (1.f - alpha) * (1.f - beta)  * ldg(&data[i  + width * j ]) +
-                alpha * (1.f - beta)         * ldg(&data[ip + width * j ]) +
-                (1.f - alpha) * beta         * ldg(&data[i  + width * jp]) +
-                alpha * beta                 * ldg(&data[ip + width * jp]);
+        assert(false);
+        return -1;
     }
 };
 
@@ -224,8 +186,13 @@ struct MemoryTraverser<T, Clamp<NORMALIZED, T>, PixelFilter<NEAREST, T>>
 {
     __host__ __device__ T get1D(const T* __restrict__ src, float x)
     {
-        x = addressingFunctor(x, width, 0, width);
-        return filteringFunctor(src, x, width);
+        x *=width;
+
+        int xi = (int) floorf(x);
+
+        xi = max(min(xi, width-1), 0);
+
+        return src[xi];
     }
 
     __host__ __device__ T get2D(const T* __restrict__ src, float x, float y)
@@ -239,7 +206,7 @@ struct MemoryTraverser<T, Clamp<NORMALIZED, T>, PixelFilter<NEAREST, T>>
         xi = max(min(xi, width-1), 0);
         yi = max(min(yi, height-1), 0);
 
-        return src[xi + yi*width];
+        return ldg(&src[xi + yi*width]);
     }
 
     Clamp<NORMALIZED, T> addressingFunctor;
@@ -254,8 +221,19 @@ struct MemoryTraverser<T, Wrap<NORMALIZED, T>, PixelFilter<LINEAR, T>>
 {
     __host__ __device__ T get1D(const T* __restrict__ src, float x)
     {
-        T i = addressingFunctor(x, width, 0, width);
-        return filteringFunctor(src, i, width);
+        x = addressingFunctor(x, width, 0, width);
+
+        x -= 0.5f;
+
+        float alpha = frac(x);
+
+        int i = floorf(x);
+
+        if (i < 0)  { i += width; alpha += 1.f; }
+
+        int ip = (i + 1) > width -  1 ? (i + 1) -  width : i + 1;
+
+        return (1.f - alpha) * ldg(&src[i]) + alpha * ldg(&src[ip]);
     }
 
     __host__ __device__ T get2D(const T* __restrict__ src, float x, float y)
@@ -273,8 +251,8 @@ struct MemoryTraverser<T, Wrap<NORMALIZED, T>, PixelFilter<LINEAR, T>>
         int j = floorf(y);
 
         //wrap only
-        if (j < 0) { j += height; beta += 1.f; }
         if (i < 0)  { i += width; alpha += 1.f; }
+        if (j < 0) { j += height; beta += 1.f; }
 
         //wrap;
         int ip = (i + 1) > width -  1 ? (i + 1) -  width : i + 1;
@@ -300,8 +278,19 @@ struct MemoryTraverser<T, Clamp<NORMALIZED, T>, PixelFilter<LINEAR, T>>
 {
     __host__ __device__ T get1D(const T* __restrict__ src, float x)
     {
-        T i = addressingFunctor(x, width, 0, width);
-        return filteringFunctor(src, i, width);
+        x = addressingFunctor(x, width, 0, width);
+
+        x -= 0.5f;
+
+        x = fmaxf(fminf(x, width  - 1), 0);
+
+        float alpha = frac(x);
+
+        int i = floorf(x);
+
+        int ip = max(min(i + 1, width -1), 0);
+
+        return (1.f - alpha) * ldg(&src[i]) + alpha * ldg(&src[ip]);
     }
 
     __host__ __device__ T get2D(const T* __restrict__ src, float x, float y)
@@ -343,8 +332,17 @@ struct MemoryTraverser<T, Clamp<NON_NORMALIZED, T>, PixelFilter<LINEAR, T>>
 {
     __host__ __device__ T get1D(const T* __restrict__ src, float x)
     {
-        T i = addressingFunctor(x, width, 0, width);
-        return filteringFunctor(src, i, width);
+        x -= 0.5f;
+
+        x = fmaxf(fminf(x, width  - 1), 0);
+
+        float alpha = frac(x);
+
+        int i = floorf(x);
+
+        int ip = max(min(i + 1, width -1), 0);
+
+        return (1.f - alpha) * ldg(&src[i]) + alpha * ldg(&src[ip]);
     }
 
     __host__ __device__ T get2D(const T* __restrict__ src, float x, float y)
